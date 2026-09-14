@@ -19,7 +19,7 @@
 #   ./install.sh <skill-id> [options] --uninstall
 #   ./install.sh --list                                # list installable skill ids
 #
-#   curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- all
+#   curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/main/install.sh | bash -s -- all
 #
 # When not run from inside a checkout of this repo (e.g. the curl|bash form
 # above), it clones (or fast-forward pulls, if already cloned before) this
@@ -59,7 +59,7 @@ Usage:
   ./install.sh <skill-id> [options] --uninstall
   ./install.sh --list
 
-  curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- all
+  curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/main/install.sh | bash -s -- all
 EOF
   exit 1
 }

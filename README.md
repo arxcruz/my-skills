@@ -19,7 +19,7 @@ From a local checkout:
 Or straight from GitHub, no clone needed:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- all
+curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/main/install.sh | bash -s -- all
 ```
 
 This clones (or fast-forward pulls, on repeat runs) the repo into
