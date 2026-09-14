@@ -12,13 +12,14 @@
 #
 # Usage (run locally from a checkout, or piped straight from GitHub):
 #   ./install.sh <skill-id> [--agent claude|opencode|all] [--project DIR]
+#   ./install.sh all                                   # every skill in the repo
 #   ./install.sh <skill-id> --target DIR
 #   ./install.sh <skill-id> [options] --copy         # copy instead of symlink
 #   ./install.sh <skill-id> [options] --force         # overwrite a non-symlink target
 #   ./install.sh <skill-id> [options] --uninstall
 #   ./install.sh --list                                # list installable skill ids
 #
-#   curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- <skill-id>
+#   curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- all
 #
 # When not run from inside a checkout of this repo (e.g. the curl|bash form
 # above), it clones (or fast-forward pulls, if already cloned before) this
@@ -51,13 +52,14 @@ usage() {
   cat >&2 <<'EOF'
 Usage:
   ./install.sh <skill-id> [--agent claude|opencode|all] [--project DIR]
+  ./install.sh all                                   # every skill in the repo
   ./install.sh <skill-id> --target DIR
   ./install.sh <skill-id> [options] --copy
   ./install.sh <skill-id> [options] --force
   ./install.sh <skill-id> [options] --uninstall
   ./install.sh --list
 
-  curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- <skill-id>
+  curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- all
 EOF
   exit 1
 }
@@ -76,12 +78,18 @@ fi
 SKILL_ID="$1"
 shift
 
-SKILL_SRC="$REPO_DIR/$SKILL_ID"
-if [[ ! -f "$SKILL_SRC/SKILL.md" ]]; then
-  echo "error: no SKILL.md found at $SKILL_SRC" >&2
-  echo "Available skills:" >&2
-  list_skills >&2
-  exit 1
+if [[ "$SKILL_ID" == "all" ]]; then
+  SKILL_IDS=()
+  while IFS= read -r id; do SKILL_IDS+=("$id"); done < <(list_skills)
+else
+  SKILL_SRC="$REPO_DIR/$SKILL_ID"
+  if [[ ! -f "$SKILL_SRC/SKILL.md" ]]; then
+    echo "error: no SKILL.md found at $SKILL_SRC" >&2
+    echo "Available skills:" >&2
+    list_skills >&2
+    exit 1
+  fi
+  SKILL_IDS=("$SKILL_ID")
 fi
 
 AGENT="all"
@@ -154,40 +162,44 @@ else
   fi
 fi
 
-for skills_dir in "${targets[@]}"; do
-  dest="$skills_dir/$SKILL_ID"
+for id in "${SKILL_IDS[@]}"; do
+  src="$REPO_DIR/$id"
 
-  if [[ $UNINSTALL -eq 1 ]]; then
+  for skills_dir in "${targets[@]}"; do
+    dest="$skills_dir/$id"
+
+    if [[ $UNINSTALL -eq 1 ]]; then
+      if [[ -e "$dest" || -L "$dest" ]]; then
+        rm -rf "$dest"
+        echo "Removed $dest"
+      else
+        echo "Nothing installed at $dest"
+      fi
+      continue
+    fi
+
+    mkdir -p "$skills_dir"
+
     if [[ -e "$dest" || -L "$dest" ]]; then
-      rm -rf "$dest"
-      echo "Removed $dest"
-    else
-      echo "Nothing installed at $dest"
+      if [[ -L "$dest" ]]; then
+        rm "$dest"
+      elif [[ $FORCE -eq 1 ]]; then
+        rm -rf "$dest"
+      else
+        echo "error: $dest already exists and is not a symlink managed by this script." >&2
+        echo "       Re-run with --force to overwrite it, or remove it manually." >&2
+        exit 1
+      fi
     fi
-    continue
-  fi
 
-  mkdir -p "$skills_dir"
-
-  if [[ -e "$dest" || -L "$dest" ]]; then
-    if [[ -L "$dest" ]]; then
-      rm "$dest"
-    elif [[ $FORCE -eq 1 ]]; then
-      rm -rf "$dest"
+    if [[ $LINK -eq 1 ]]; then
+      ln -s "$src" "$dest"
+      echo "Linked $dest -> $src"
     else
-      echo "error: $dest already exists and is not a symlink managed by this script." >&2
-      echo "       Re-run with --force to overwrite it, or remove it manually." >&2
-      exit 1
+      cp -R "$src" "$dest"
+      echo "Copied $src -> $dest"
     fi
-  fi
-
-  if [[ $LINK -eq 1 ]]; then
-    ln -s "$SKILL_SRC" "$dest"
-    echo "Linked $dest -> $SKILL_SRC"
-  else
-    cp -R "$SKILL_SRC" "$dest"
-    echo "Copied $SKILL_SRC -> $dest"
-  fi
+  done
 done
 
 [[ $UNINSTALL -eq 0 ]] && echo && echo "Restart your agent tool (or start a new session) to pick it up."

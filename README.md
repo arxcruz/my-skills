@@ -9,6 +9,7 @@ From a local checkout:
 ```
 ./install.sh --list                # show installable skill ids
 ./install.sh <skill-id>             # symlink into all known agent skill dirs
+./install.sh all                    # install every skill in this repo
 ./install.sh <skill-id> --agent claude
 ./install.sh <skill-id> --agent opencode --project /path/to/repo
 ./install.sh <skill-id> --target /path/to/any/other/tools/skills/dir
@@ -18,7 +19,7 @@ From a local checkout:
 Or straight from GitHub, no clone needed:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- <skill-id>
+curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- all
 ```
 
 This clones (or fast-forward pulls, on repeat runs) the repo into
