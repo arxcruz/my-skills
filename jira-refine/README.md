@@ -4,18 +4,21 @@ A portable skill for refining a Jira ticket into a parallelizable epic /
 story / task / spike breakdown. See `SKILL.md` for the full instructions —
 it's the file any agent tool actually reads.
 
-## Using it in Claude Code
+## Install
+
+From the repo root, use the generic installer (see [`../install.sh`](../install.sh)):
 
 ```
-ln -s /home/arxcruz/repos/github.com/arxcruz/jira-refine-skill ~/.claude/skills/jira-refine
+../install.sh jira-refine                 # symlink into ~/.claude/skills and ~/.config/opencode/skills
+../install.sh jira-refine --agent claude  # just Claude Code
+../install.sh jira-refine --target /path/to/some/other/tools/skills/dir
 ```
 
-## Using it in opencode (or any other tool)
-
-Point the tool at this folder the way it expects skills/prompts to be
-supplied — most agent CLIs just need `SKILL.md` fed in as a system/context
-file and the working directory set here so `python3 scripts/jira_client.py`
-resolves. No install step: the script is stdlib-only Python 3.7+.
+For any tool not built in, point it at this folder the way it expects
+skills/prompts to be supplied — most agent CLIs just need `SKILL.md` fed in
+as a system/context file and the working directory set here so
+`python3 scripts/jira_client.py` resolves. No build step: the script is
+stdlib-only Python 3.7+.
 
 ## Required environment
 
