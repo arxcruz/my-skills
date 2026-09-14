@@ -10,7 +10,7 @@
 # For any other tool, pass --target DIR to symlink/copy straight into its
 # skills directory — no agent-specific knowledge needed.
 #
-# Usage:
+# Usage (run locally from a checkout, or piped straight from GitHub):
 #   ./install.sh <skill-id> [--agent claude|opencode|all] [--project DIR]
 #   ./install.sh <skill-id> --target DIR
 #   ./install.sh <skill-id> [options] --copy         # copy instead of symlink
@@ -18,15 +18,47 @@
 #   ./install.sh <skill-id> [options] --uninstall
 #   ./install.sh --list                                # list installable skill ids
 #
+#   curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- <skill-id>
+#
+# When not run from inside a checkout of this repo (e.g. the curl|bash form
+# above), it clones (or fast-forward pulls, if already cloned before) this
+# repo into a cache dir and installs from there instead, so the same symlink
+# stays live across future `git pull`s of that cache.
+#
 # Default: --agent all, global scope, symlink (so pulling this repo picks up
 # changes immediately, no re-install step).
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_URL="https://github.com/arxcruz/my-skills.git"
+CACHE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/my-skills"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd || true)"
+
+if [[ -n "$SCRIPT_DIR" && -d "$SCRIPT_DIR/.git" ]]; then
+  REPO_DIR="$SCRIPT_DIR"
+else
+  command -v git >/dev/null 2>&1 || { echo "error: git is required to install from a remote (curl|bash) invocation" >&2; exit 1; }
+  if [[ -d "$CACHE_DIR/.git" ]]; then
+    git -C "$CACHE_DIR" pull -q --ff-only
+  else
+    git clone -q "$REPO_URL" "$CACHE_DIR"
+  fi
+  REPO_DIR="$CACHE_DIR"
+fi
 
 usage() {
-  grep -E '^#( |$)' "$0" | sed -E 's/^# ?//' | sed -n '2,20p'
+  cat >&2 <<'EOF'
+Usage:
+  ./install.sh <skill-id> [--agent claude|opencode|all] [--project DIR]
+  ./install.sh <skill-id> --target DIR
+  ./install.sh <skill-id> [options] --copy
+  ./install.sh <skill-id> [options] --force
+  ./install.sh <skill-id> [options] --uninstall
+  ./install.sh --list
+
+  curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/master/install.sh | bash -s -- <skill-id>
+EOF
   exit 1
 }
 
