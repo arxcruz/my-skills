@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Install (or update) any skill in this repo, for any agent tool.
+# Install (or update) skills and MCP servers from this repo.
 #
-# Known agents and where they look for skills:
-#   claude    global:  ~/.claude/skills/<id>
-#             project: <dir>/.claude/skills/<id>
-#   opencode  global:  ~/.config/opencode/skills/<id>  (respects XDG_CONFIG_HOME)
-#             project: <dir>/.opencode/skills/<id>
-#
-# For any other tool, pass --target DIR to symlink/copy straight into its
-# skills directory — no agent-specific knowledge needed.
-#
-# Usage (run locally from a checkout, or piped straight from GitHub):
+# SKILLS — symlink/copy a skill directory into the agent's skills path:
 #   ./install.sh <skill-id> [--agent claude|opencode|all] [--project DIR]
 #   ./install.sh all                                   # every skill in the repo
 #   ./install.sh <skill-id> --target DIR
-#   ./install.sh <skill-id> [options] --copy         # copy instead of symlink
-#   ./install.sh <skill-id> [options] --force         # overwrite a non-symlink target
+#   ./install.sh <skill-id> [options] --copy           # copy instead of symlink
+#   ./install.sh <skill-id> [options] --force          # overwrite a non-symlink target
 #   ./install.sh <skill-id> [options] --uninstall
+#
+# MCP SERVERS — register an MCP server with Claude Code:
+#   ./install.sh mcp <name>                            # register globally (user scope)
+#   ./install.sh mcp <name> --env-file /path/.env      # pass credentials file
+#   ./install.sh mcp <name> --scope project            # project scope (.mcp.json)
+#   ./install.sh mcp <name> --uninstall                # remove registration
+#   ./install.sh mcp --list                            # list available MCP servers
+#
+# LISTING:
 #   ./install.sh --list                                # list installable skill ids
 #
 #   curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/main/install.sh | bash -s -- all
@@ -26,8 +26,8 @@
 # repo into a cache dir and installs from there instead, so the same symlink
 # stays live across future `git pull`s of that cache.
 #
-# Default: --agent all, global scope, symlink (so pulling this repo picks up
-# changes immediately, no re-install step).
+# Default for skills: --agent all, global scope, symlink (so pulling this repo
+# picks up changes immediately, no re-install step).
 
 set -euo pipefail
 
@@ -50,14 +50,15 @@ fi
 
 usage() {
   cat >&2 <<'EOF'
-Usage:
+Usage (skills):
   ./install.sh <skill-id> [--agent claude|opencode|all] [--project DIR]
-  ./install.sh all                                   # every skill in the repo
-  ./install.sh <skill-id> --target DIR
-  ./install.sh <skill-id> [options] --copy
-  ./install.sh <skill-id> [options] --force
-  ./install.sh <skill-id> [options] --uninstall
+  ./install.sh all
+  ./install.sh <skill-id> [--copy] [--force] [--uninstall] [--target DIR]
   ./install.sh --list
+
+Usage (MCP servers):
+  ./install.sh mcp <name> [--env-file PATH] [--scope user|project] [--uninstall]
+  ./install.sh mcp --list
 
   curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/main/install.sh | bash -s -- all
 EOF
@@ -68,8 +69,18 @@ list_skills() {
   find "$REPO_DIR" -maxdepth 2 -name SKILL.md -exec dirname {} \; | xargs -n1 basename | sort
 }
 
+list_mcps() {
+  find "$REPO_DIR/mcp" -maxdepth 1 -name 'setup-*.sh' 2>/dev/null \
+    | xargs -n1 basename \
+    | sed 's/^setup-//; s/\.sh$//' \
+    | sort
+}
+
 if [[ "${1:-}" == "--list" ]]; then
-  list_skills
+  echo "Skills:"
+  list_skills | sed 's/^/  /'
+  echo "MCP servers:"
+  list_mcps | sed 's/^/  /'
   exit 0
 fi
 
@@ -77,6 +88,25 @@ fi
 
 SKILL_ID="$1"
 shift
+
+# ---------- MCP subcommand ----------
+if [[ "$SKILL_ID" == "mcp" ]]; then
+  if [[ "${1:-}" == "--list" ]]; then
+    list_mcps
+    exit 0
+  fi
+  MCP_NAME="${1:-}"
+  [[ -z "$MCP_NAME" ]] && { echo "error: 'mcp' requires a server name (e.g. jira-mcp)" >&2; usage; }
+  shift
+  SETUP_SCRIPT="$REPO_DIR/mcp/setup-${MCP_NAME}.sh"
+  if [[ ! -x "$SETUP_SCRIPT" ]]; then
+    echo "error: no setup script found at $SETUP_SCRIPT" >&2
+    echo "Available MCP servers:" >&2
+    list_mcps >&2
+    exit 1
+  fi
+  exec "$SETUP_SCRIPT" "$@"
+fi
 
 if [[ "$SKILL_ID" == "all" ]]; then
   SKILL_IDS=()
