@@ -1,30 +1,28 @@
 ---
 name: jira-refine
-description: Refine a Jira ticket into small, independently-shippable pieces of work the whole team can pick up in parallel. Reads the ticket's description and already-linked tickets via the Jira API, interviews the user as a principal architect to close every gap, then outputs an epic/story/task/spike breakdown with dependencies. Use when given a Jira ticket key (e.g. TICKET-123) and asked to refine, break down, split, decompose, or plan it into sub-tickets.
+description: Refine a Jira ticket into small, independently-shippable pieces of work the whole team can pick up in parallel. Reads the ticket's description and already-linked tickets via a configured Jira MCP server, interviews the user as a principal architect to close every gap, then outputs an epic/story/task/spike breakdown with dependencies. Use when given a Jira ticket key (e.g. TICKET-123) and asked to refine, break down, split, decompose, or plan it into sub-tickets.
 ---
 
 # Jira ticket refinement
 
-Runs anywhere a Python 3.7+ interpreter is available — Claude Code, opencode,
-or a bare CLI wired to a local model (qwen, llama, etc). No third-party
-dependency: `scripts/jira_client.py` uses only the Python standard library.
+Uses a Jira MCP server for all Jira API access — no Python script or separate
+credentials needed beyond the MCP server configuration.
 
 ## Setup
 
-Requires these environment variables, already exported before this skill runs:
+Requires the `jira-mcp` MCP server configured in your Claude Code MCP
+settings. The server lives at `mcp/jira_mcp.py` in this repo — register it
+with `mcp/setup-jira-mcp.sh` (see the README).
 
-- `JIRA_URL` — base URL, no trailing slash (e.g. `https://yourcompany.atlassian.net`)
-- `JIRA_TOKEN` — API token (Cloud) or Personal Access Token (Server/Data Center)
-- `JIRA_EMAIL` — **required for Jira Cloud** (any `*.atlassian.net` instance):
-  the account email the token belongs to. Cloud only accepts Basic auth
-  (`email:token`), not Bearer. Leave unset only for a Server/Data Center
-  instance, where the token is a PAT sent as `Bearer`.
+MCP tools used by this skill:
 
-If a required var is missing, `scripts/jira_client.py` prints
-`{"error": "..."}` and exits 1 instead of a raw traceback — surface that
-error to the user and stop rather than guessing at credentials. A `403` with
-body `"Failed to parse Connect Session Auth Token"` means `JIRA_EMAIL` is
-missing against a Cloud instance — set it and retry.
+- **`jira_get_issues`** — fetch one or more issues by key; pass
+  `all_fields: true` to include subtasks, issue links, parent, and components
+- **`jira_search`** — run a JQL query and return a compact list of issues
+
+Before running, confirm the `jira-mcp` server is connected. If no Jira MCP
+tools are available, surface that to the user and stop rather than falling
+back to any other mechanism.
 
 Optionally, `JIRA_REFINE_CONTEXT_DIRS` — a `:`-separated list of absolute
 paths to domain-context repos (see Step 0). If unset, there is no domain
@@ -33,9 +31,8 @@ context — Step 0 simply does less.
 Optionally, `JIRA_REFINE_SOURCE_REPOS` — an absolute path to a directory
 whose immediate subdirectories are real source-code checkouts (e.g.
 `~/repos/github.com/your-org` containing `service-a/`, `service-b/`, etc).
-Unlike the context repos above, this is **read
-reactively, never upfront** — see Step 2.5. If unset, that step does
-nothing.
+Unlike the context repos above, this is **read reactively, never upfront** —
+see Step 2.5. If unset, that step does nothing.
 
 ## Step 0 — load domain context, if any is configured
 
@@ -58,20 +55,16 @@ before — nothing downstream depends on it being present.
 
 ## Step 1 — load the ticket and its existing context
 
-Run:
-
-```
-python3 scripts/jira_client.py get <TICKET-KEY>
-```
-
-This returns the ticket's summary, description, type, status, labels,
-components, parent, subtasks, and issue links as one JSON object.
+Call `jira_get_issues` with `issue_keys: ["<TICKET-KEY>"]` and
+`all_fields: true`. This returns the full issue payload including summary,
+description, type, status, labels, components, parent, subtasks, and issue
+links.
 
 If the result has a non-empty `subtasks`, `issuelinks`, or `parent`, or its
-`issuetype` is `Epic`, also run:
+`issuetype` is `Epic`, also call `jira_search` with:
 
 ```
-python3 scripts/jira_client.py children <TICKET-KEY>
+"Epic Link" = <TICKET-KEY> OR parent = <TICKET-KEY> ORDER BY created ASC
 ```
 
 to list everything already filed underneath it (classic Epic Link or

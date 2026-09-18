@@ -14,19 +14,37 @@ From the repo root, use the generic installer (see [`../install.sh`](../install.
 ../install.sh jira-refine --target /path/to/some/other/tools/skills/dir
 ```
 
-For any tool not built in, point it at this folder the way it expects
-skills/prompts to be supplied — most agent CLIs just need `SKILL.md` fed in
-as a system/context file and the working directory set here so
-`python3 scripts/jira_client.py` resolves. No build step: the script is
-stdlib-only Python 3.7+.
+## Required: jira-mcp MCP server
 
-## Required environment
+This skill uses the `jira-mcp` MCP server, which lives in the shared
+[`../mcp/`](../mcp/) directory alongside the server script.
+
+Register it with Claude Code:
+
+```bash
+# Register globally (user scope) — simplest
+../mcp/setup-jira-mcp.sh
+
+# Pass a credentials .env file
+../mcp/setup-jira-mcp.sh --env-file ~/.config/jira/.env
+
+# Register per-project instead of globally
+../mcp/setup-jira-mcp.sh --scope project --env-file ~/.config/jira/.env
+
+# Remove the registration
+../mcp/setup-jira-mcp.sh --uninstall
+```
+
+The `.env` file (or exported env vars) must provide:
 
 ```
-export JIRA_URL=https://yourcompany.atlassian.net
-export JIRA_TOKEN=<API token, or PAT for Server/Data Center>
-export JIRA_EMAIL=you@yourcompany.com   # required for Jira Cloud (Basic auth); omit for Server/Data Center (Bearer/PAT)
+JIRA_URL=https://yourcompany.atlassian.net
+JIRA_USERNAME=you@yourcompany.com
+JIRA_PASSWORD=<API token>
 ```
+
+Optional: `JIRA_BEARER_TOKEN`, `JIRA_AUTH` (`basic`/`bearer`),
+`JIRA_CLOUD` (`false` for Server/Data Center).
 
 ## Domain context (optional)
 
@@ -52,17 +70,4 @@ A directory of real source-code checkouts as subdirectories (e.g.
 `service-a/`, `service-b/`). Unlike the context docs above, the skill
 never scans this upfront — it only reaches in when a specific question
 during the interview names a concrete system the curated context doesn't
-already settle ("how does service-a handle X"), matches that name to a
-subdirectory, and searches inside just that repo for the specific term.
-
-## Manual script usage
-
-```
-python3 scripts/jira_client.py get TICKET-123
-python3 scripts/jira_client.py links TICKET-123
-python3 scripts/jira_client.py children TICKET-123
-python3 scripts/jira_client.py search 'project = ABC AND status = Open'
-```
-
-Every command prints one JSON document to stdout and exits 1 with
-`{"error": "..."}` on failure — never a raw traceback.
+already settle.
