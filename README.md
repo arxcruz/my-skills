@@ -19,13 +19,17 @@ One script handles both skills and MCP servers.
 ./install.sh <skill-id> --uninstall
 ```
 
-**MCP servers** — register an MCP server with Claude Code:
+**MCP servers** — register an MCP server with one or more agent tools:
 
 ```
-./install.sh mcp --list                    # show available MCP servers
-./install.sh mcp <name>                    # register globally (user scope)
+./install.sh mcp --list                               # show available MCP servers
+./install.sh mcp <name>                               # register for all agents (user scope)
+./install.sh mcp <name> --agent claude                # Claude Code only
+./install.sh mcp <name> --agent opencode              # opencode only
+./install.sh mcp <name> --agent antigravity           # antigravity-cli only
 ./install.sh mcp <name> --env-file ~/.config/jira/.env
-./install.sh mcp <name> --scope project    # project scope (.mcp.json)
+./install.sh mcp <name> --scope project               # project scope (uses cwd)
+./install.sh mcp <name> --project-dir /path/to/proj
 ./install.sh mcp <name> --uninstall
 ```
 
@@ -41,12 +45,13 @@ after `--`.
 
 ### Known agents
 
-| agent | skills (global) | skills (project) |
-|---|---|---|
-| claude | `~/.claude/skills/<id>` | `<dir>/.claude/skills/<id>` |
-| opencode | `~/.config/opencode/skills/<id>` | `<dir>/.opencode/skills/<id>` |
+| agent | skills (global) | skills (project) | MCP config (global) | MCP config (project) |
+|---|---|---|---|---|
+| claude | `~/.claude/skills/<id>` | `<dir>/.claude/skills/<id>` | via `claude mcp add` | via `claude mcp add --project` |
+| opencode | `~/.config/opencode/skills/<id>` | `<dir>/.opencode/skills/<id>` | `~/.config/opencode/config.json` (`.mcp`) | `<dir>/opencode.json` (`.mcp`) |
+| antigravity | — | — | `~/.gemini/config/mcp_config.json` (`.mcpServers`) | `<dir>/.agents/mcp_config.json` (`.mcpServers`) |
 
-For any other tool, pass `--target DIR` to symlink/copy straight into its
+For any other tool, pass `--target DIR` to symlink/copy skills straight into its
 skills directory — no agent-specific knowledge needed.
 
 ## Skills

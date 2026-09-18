@@ -9,11 +9,15 @@
 #   ./install.sh <skill-id> [options] --force          # overwrite a non-symlink target
 #   ./install.sh <skill-id> [options] --uninstall
 #
-# MCP SERVERS — register an MCP server with Claude Code:
-#   ./install.sh mcp <name>                            # register globally (user scope)
-#   ./install.sh mcp <name> --env-file /path/.env      # pass credentials file
-#   ./install.sh mcp <name> --scope project            # project scope (.mcp.json)
-#   ./install.sh mcp <name> --uninstall                # remove registration
+# MCP SERVERS — register an MCP server with one or more agent tools:
+#   ./install.sh mcp <name>                            # register for all agents (user scope)
+#   ./install.sh mcp <name> --agent claude             # Claude Code only
+#   ./install.sh mcp <name> --agent opencode           # opencode only
+#   ./install.sh mcp <name> --agent antigravity        # antigravity-cli only
+#   ./install.sh mcp <name> --env-file /path/.env      # pass credentials file to server
+#   ./install.sh mcp <name> --scope project            # project scope (uses cwd)
+#   ./install.sh mcp <name> --project-dir /path        # explicit project dir
+#   ./install.sh mcp <name> --uninstall                # remove all registrations
 #   ./install.sh mcp --list                            # list available MCP servers
 #
 # LISTING:
@@ -57,7 +61,7 @@ Usage (skills):
   ./install.sh --list
 
 Usage (MCP servers):
-  ./install.sh mcp <name> [--env-file PATH] [--scope user|project] [--uninstall]
+  ./install.sh mcp <name> [--agent claude|opencode|antigravity|all] [--env-file PATH] [--scope user|project] [--project-dir DIR] [--uninstall]
   ./install.sh mcp --list
 
   curl -fsSL https://raw.githubusercontent.com/arxcruz/my-skills/main/install.sh | bash -s -- all
