@@ -12,6 +12,8 @@
 #   ./setup-jira-mcp.sh --project-dir /path/to/proj  # explicit project dir
 #   ./setup-jira-mcp.sh --uninstall                   # remove all registrations
 #
+# To make Jira read-only for one project folder (deny every write tool), see lock-jira-readonly.sh.
+#
 # Required credentials — set in an env file OR export before running:
 #   JIRA_URL        https://yourcompany.atlassian.net
 #   JIRA_USERNAME   you@yourcompany.com
@@ -119,10 +121,11 @@ install_claude() {
 }
 
 # Edit a JSON config file: set or remove .${json_key}.${MCP_NAME}
-# Args: <config_file> <json_key>
+# Args: <config_file> <json_key> [format: default|opencode]
 edit_json_config() {
   local config_file="$1"
   local json_key="$2"
+  local format="${3:-default}"
   if [[ $UNINSTALL -eq 1 ]]; then
     [[ -f "$config_file" ]] || return 0
     python3 - "$config_file" "$json_key" "$MCP_NAME" <<'PYEOF'
@@ -137,10 +140,13 @@ PYEOF
     local server_json
     server_json="$(python3 -c "
 import json, sys
-cmd = sys.argv[1]
-args = sys.argv[2:]
-print(json.dumps({'command': cmd, 'args': args}))
-" "$SERVER_CMD" "${SERVER_ARGS[@]}")"
+fmt, cmd, args = sys.argv[1], sys.argv[2], sys.argv[3:]
+if fmt == 'opencode':
+    entry = {'type': 'local', 'command': [cmd] + args, 'enabled': True}
+else:
+    entry = {'command': cmd, 'args': args}
+print(json.dumps(entry))
+" "$format" "$SERVER_CMD" "${SERVER_ARGS[@]}")"
     python3 - "$config_file" "$json_key" "$MCP_NAME" "$server_json" <<'PYEOF'
 import json, sys, pathlib
 p = pathlib.Path(sys.argv[1])
@@ -160,7 +166,7 @@ install_opencode() {
   else
     config_file="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/config.json"
   fi
-  edit_json_config "$config_file" "mcp"
+  edit_json_config "$config_file" "mcp" opencode
   if [[ $UNINSTALL -eq 1 ]]; then
     echo "  [opencode] removed $MCP_NAME from $config_file"
   else
