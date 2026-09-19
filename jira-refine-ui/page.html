@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>jira-refine-ui</title>
+<style>
+  :root {
+    --bg: #f7f4ee; --panel: #ffffff; --ink: #1f1c18; --ink-2: #625b51; --ink-3: #9a9285;
+    --rule: #e6e0d4; --accent: #9a3a26; --ok: #3d6b4a; --ok-soft: #e3eee5; --stage: #b8791f; --stage-soft: #f8ecd2; --warn-soft: #fbe9e4;
+    --serif: "Iowan Old Style", Charter, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  /* Base size grows with the window (1920px wide ~ 18.6px, 2560px ~ 22px, 3440px ~ 27px); everything else is in rem. */
+  html { font-size: clamp(16px, 0.55vw + 8px, 28px); }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--sans); font-size: 0.9375rem; line-height: 1.5; color: var(--ink); background: var(--bg);
+    display: grid; grid-template-rows: auto auto 1fr auto; grid-template-columns: 16.875rem minmax(0, 1fr) 33vw; height: 100vh;
+  }
+  #banner { grid-row: 1; grid-column: 1 / -1; display: none; padding: 0.5625rem 1.5rem; font-size: 0.875rem; background: var(--warn-soft); color: var(--accent); border-bottom: 1px solid var(--rule); }
+  #banner.show { display: block; } #banner.done { background: var(--ok-soft); color: var(--ok); }
+
+  header { grid-row: 2; grid-column: 1 / -1; display: flex; align-items: center; gap: 0.875rem; padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--rule); background: var(--panel); position: relative; }
+  header h1 { font-family: var(--serif); font-weight: 500; font-size: 1.25rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .tabs { display: flex; gap: 0.375rem; }
+  .zoom { display: inline-flex; gap: 0.25rem; }
+  .zoom button { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
+  .tabs button { font-size: 0.75rem; padding: 0.25rem 0.75rem; }
+  .tabs button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  header .status { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; color: var(--ink-2); white-space: nowrap; }
+  .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--ok); }
+  .dot.working { background: var(--stage); animation: pulse 1.2s ease-in-out infinite; }
+  .dot.gone { background: var(--ink-3); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin { display: inline-block; width: 0.6875rem; height: 0.6875rem; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; flex-shrink: 0; }
+  #progress { display: none; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: hidden; background: var(--stage-soft); }
+  header.working #progress { display: block; }
+  #progress::after { content: ""; position: absolute; top: 0; bottom: 0; width: 30%; background: var(--stage); animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { left: -30%; } to { left: 100%; } }
+
+  nav { grid-row: 3; grid-column: 1; border-right: 1px solid var(--rule); overflow-y: auto; padding: 0.625rem 0 1.5rem; }
+  nav .round { padding: 1rem 1.25rem 0.375rem; font-size: 0.6875rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); display: flex; justify-content: space-between; }
+  nav .round.current { color: var(--accent); }
+  .cov { padding: 0.5rem 1.25rem 0.25rem; }
+  .cov .row { display: flex; gap: 0.5rem; font-size: 0.75rem; color: var(--ink-3); padding: 1px 0; }
+  .cov .row.done { color: var(--ok); } .cov .row .m { width: 0.75rem; text-align: center; }
+  .item { display: grid; grid-template-columns: 1.875rem 1fr auto; gap: 0.5rem; align-items: baseline; padding: 0.5rem 1.25rem; cursor: pointer; }
+  .item:hover { background: #efebe3; }
+  .item.selected { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
+  .item .id { font-size: 0.75rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .t { min-width: 0; overflow-wrap: anywhere; }
+  .item .t { font-size: 0.875rem; }
+  .item .mark { font-size: 0.6875rem; color: var(--ink-3); display: inline-flex; align-items: center; gap: 0.25rem; }
+  .item .mark svg { width: 0.75rem; height: 0.75rem; }
+  .mark.answered { color: var(--ok); } .mark.open, .mark.reopened { color: var(--accent); } .mark.staged { color: var(--stage); font-weight: 600; } .mark.pending { color: var(--stage); }
+  .item.updated .t::after { content: "updated"; font-size: 0.625rem; color: var(--stage); margin-left: 0.375rem; letter-spacing: .06em; text-transform: uppercase; }
+
+  main { grid-row: 3; grid-column: 2; overflow-y: auto; padding: 2.25rem 2.75rem 3.75rem; background: var(--panel); }
+  .card { max-width: 43.75rem; }
+  .crumb { font-size: 0.75rem; color: var(--ink-3); display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .crumb .upd { color: var(--stage); }
+  .card h2 { font-family: var(--serif); font-weight: 500; font-size: 1.875rem; line-height: 1.15; margin: 0.5rem 0 0.75rem; }
+  .card h3 { font-size: 0.6875rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 1.625rem 0 0.5rem; font-weight: 600; }
+  .card .body { font-size: 0.9375rem; color: var(--ink-2); max-width: 66ch; margin: 0; white-space: pre-line; }
+  .card ul { margin: 0.25rem 0 0; padding-left: 1.25rem; color: var(--ink-2); font-size: 0.875rem; }
+  .opts { list-style: none; padding: 0; margin: 1.5rem 0 0; display: grid; gap: 0.5rem; }
+  .opt { display: grid; grid-template-columns: 1.75rem 1fr auto; gap: 0.75rem; align-items: start; padding: 0.75rem 0.875rem; border: 1px solid var(--rule); border-radius: 0.5rem; background: var(--panel); cursor: pointer; }
+  .opt .check { width: 1.25rem; height: 1.25rem; color: var(--ok); visibility: hidden; align-self: center; }
+  .opt .check svg, .mark svg { display: block; width: 100%; height: 100%; }
+  .opt:hover { border-color: var(--ink-3); }
+  .opt .k { font-family: var(--serif); font-size: 1.125rem; line-height: 1.2; color: var(--ink-3); }
+  .opt.rec { border-color: var(--accent); } .opt.rec .k { color: var(--accent); }
+  .opt .tag { font-size: 0.6875rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+  .opt.chosen { background: var(--ok-soft); border-color: var(--ok); } .opt.chosen .k, .opt.chosen .tag { color: var(--ok); } .opt.chosen .check { visibility: visible; }
+  .card.picked .body, .card.picked .why, .card.picked .answer-row, .card.picked .links, .card.picked .opt:not(.chosen):not(.staged):not(.sent) { opacity: .45; transition: opacity .15s; }
+  .card.picked .opt:not(.chosen):not(.staged):not(.sent):hover, .card.picked .answer-row:focus-within, .card.picked .links:hover { opacity: 1; }
+  .opt.text-answer { cursor: default; } .opt.text-answer .tag { color: var(--ok); }
+  .opt.staged { border-color: var(--stage); box-shadow: 0 0 0 1px var(--stage); background: var(--stage-soft); }
+  .opt.staged .k, .opt.staged .tag { color: var(--stage); } .opt.staged .check { visibility: visible; color: var(--stage); }
+  .opt.sent { border-color: var(--stage); border-style: dashed; background: var(--panel); }
+  .opt.sent .k, .opt.sent .tag { color: var(--stage); } .opt.sent .check { visibility: visible; color: var(--stage); }
+  .card.picked .opt.sent { opacity: 1; }
+  .locked .opt { cursor: default; }
+  .why { margin: 0.875rem 0 0; font-size: 0.875rem; color: var(--ink-2); white-space: pre-line; } .why b { color: var(--accent); font-weight: 600; }
+  .staged-line { margin-top: 0.625rem; font-size: 0.875rem; color: var(--stage); } .staged-line a { color: var(--ink-3); font-size: 0.75rem; margin-left: 0.5rem; cursor: pointer; }
+  .answer-row { display: flex; gap: 0.5rem; margin-top: 1.25rem; align-items: flex-start; }
+  .links { margin-top: 0.75rem; font-size: 0.8125rem; display: flex; gap: 0.875rem; } .links a { color: var(--ink-3); cursor: pointer; } .links a:hover { color: var(--accent); }
+  textarea { width: 100%; min-height: 3.75rem; font: inherit; font-size: 0.875rem; padding: 0.625rem 0.75rem; border: 1px solid var(--rule); border-radius: 0.5rem; background: var(--panel); resize: vertical; color: var(--ink); }
+  textarea:focus { outline: none; border-color: var(--ink-3); }
+  button { font-family: var(--sans); font-weight: 500; font-size: 0.875rem; padding: 0.5625rem 0.875rem; border-radius: 0.5rem; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; white-space: nowrap; }
+  button:hover { border-color: var(--ink-3); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled, button.primary:disabled { background: var(--ink-3); border-color: var(--ink-3); color: #fff; cursor: default; }
+  main .empty { color: var(--ink-3); font-size: 0.875rem; }
+
+  .type { display: inline-block; font-size: 0.6875rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  .sizes { display: flex; gap: 0.375rem; flex-wrap: wrap; margin-top: 0.25rem; }
+  .sizes button { padding: 0.375rem 0.75rem; min-width: 2.625rem; }
+  .sizes button.chosen { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+  .sizes button.staged { background: var(--stage-soft); border-color: var(--stage); color: var(--stage); }
+  .callout { margin-top: 0.875rem; padding: 0.625rem 0.75rem; border-radius: 0.5rem; background: var(--warn-soft); color: var(--accent); font-size: 0.8125rem; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-top: 0.25rem; }
+  table.t th { text-align: left; font-size: 0.6875rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; padding: 0.375rem 0.5rem 0.375rem 0; border-bottom: 1px solid var(--rule); }
+  table.t td { padding: 0.4375rem 0.5rem 0.4375rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .stats { display: flex; gap: 1.75rem; margin-top: 0.25rem; }
+  .stats div b { display: block; font-family: var(--serif); font-size: 1.75rem; font-weight: 500; }
+  .stats div span { font-size: 0.75rem; color: var(--ink-3); }
+
+  aside { grid-row: 3; grid-column: 3; border-left: 1px solid var(--rule); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+  aside .head { padding: 1.25rem 1.375rem 0.75rem; }
+  aside .head h3 { margin: 0; font-size: 0.6875rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  aside .head .sub { font-family: var(--serif); font-size: 1rem; margin-top: 0.25rem; }
+  aside .msgs { overflow-y: auto; padding: 0 1.375rem 0.75rem; }
+  .msg { padding: 0.75rem 0; border-top: 1px solid var(--rule); position: relative; }
+  .msg .who { font-size: 0.6875rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 0.25rem; }
+  .msg.user .who { color: var(--stage); } .msg.agent .who { color: var(--accent); }
+  .msg.staged { background: var(--stage-soft); margin: 0.5rem -10px 0; padding: 0.625rem 1.75rem 0.625rem 0.625rem; border-radius: 0.375rem; border-top: 0; }
+  .msg.pending { opacity: .7; } .msg.pending .who { display: flex; align-items: center; gap: 0.375rem; }
+  .msg .text { font-size: 0.875rem; white-space: pre-line; }
+  .msg .rm { position: absolute; right: 0.5rem; top: 0.5rem; color: var(--ink-3); cursor: pointer; font-size: 0.875rem; }
+  .empty-thread { padding: 0.75rem 0; font-size: 0.8125rem; color: var(--ink-3); border-top: 1px solid var(--rule); }
+  aside .compose { padding: 0.75rem 1.375rem 1.125rem; border-top: 1px solid var(--rule); display: grid; gap: 0.5rem; } aside .compose button { justify-self: end; }
+
+  footer { grid-row: 4; grid-column: 1 / -1; display: flex; align-items: center; gap: 0.875rem; padding: 0.75rem 1.5rem; border-top: 1px solid var(--rule); background: var(--panel); }
+  footer .staged-list { font-size: 0.8125rem; color: var(--ink-2); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } footer .staged-list b { color: var(--stage); }
+  footer .hint { font-size: 0.75rem; color: var(--ink-3); } footer .warn { font-size: 0.75rem; color: var(--accent); }
+  #approve-area { display: flex; gap: 0.75rem; align-items: center; }
+  footer label { font-size: 0.8125rem; color: var(--ink-2); display: flex; gap: 0.375rem; align-items: center; white-space: nowrap; }
+  #approve.ready { background: var(--ok); border-color: var(--ok); color: #fff; font-weight: 600; animation: ready 1.2s ease-in-out infinite; }
+  @keyframes ready { 0%, 100% { background-color: var(--ok); } 50% { background-color: #7fb08d; } }
+  #approve:disabled { background: var(--panel); border-color: var(--rule); color: var(--ink-3); animation: none; }
+
+  .md { max-width: 47.5rem; }
+  .md h1 { font-family: var(--serif); font-weight: 500; font-size: 2rem; line-height: 1.15; margin: 0 0 0.875rem; }
+  .md h2 { font-family: var(--serif); font-weight: 500; font-size: 1.5rem; margin: 1.875rem 0 0.625rem; padding-top: 0.375rem; border-top: 1px solid var(--rule); }
+  .md h3 { font-family: var(--serif); font-weight: 500; font-size: 1.125rem; margin: 1.375rem 0 0.375rem; }
+  .md h4 { font-size: 0.875rem; margin: 1rem 0 0.25rem; }
+  .md p { margin: 0.5rem 0; } .md ul, .md ol { margin: 0.375rem 0; padding-left: 1.375rem; } .md li { margin: 3px 0; }
+  .md code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.8125rem; background: var(--bg); padding: 1px 0.3125rem; border-radius: 0.25rem; }
+  .md pre { background: var(--bg); border: 1px solid var(--rule); border-radius: 0.5rem; padding: 0.75rem 0.875rem; overflow-x: auto; } .md pre code { background: none; padding: 0; }
+  .md blockquote { margin: 0.625rem 0; padding: 0.25rem 0.875rem; border-left: 3px solid var(--rule); color: var(--ink-2); }
+  .md table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin: 0.625rem 0; } .md th { text-align: left; font-size: 0.6875rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1px solid var(--ink-3); padding: 0.375rem 0.5rem; } .md td { padding: 0.4375rem 0.5rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .md hr { border: 0; border-top: 1px solid var(--rule); margin: 1.375rem 0; } .md a { color: var(--accent); }
+  @media (max-width: 1000px) {
+    body { grid-template-columns: 13.75rem minmax(0, 1fr); height: auto; min-height: 100vh; }
+    aside { grid-row: 4; grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--rule); }
+    footer { grid-row: 5; }
+    main { padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div id="banner"></div>
+<header>
+  <h1 id="title">jira-refine</h1>
+  <div class="tabs" id="tabs"></div>
+  <span class="zoom" title="Text size"><button type="button" id="zoom-out" aria-label="Smaller text">A−</button><button type="button" id="zoom-in" aria-label="Larger text">A+</button></span>
+  <span class="status"><span class="dot" id="agent-dot"></span><span id="agent-status">connecting…</span></span>
+  <div id="progress"></div>
+</header>
+<nav id="nav"></nav>
+<main id="main"></main>
+<aside id="aside"></aside>
+<footer>
+  <span class="staged-list" id="staged-list"></span>
+  <span class="warn" id="send-why"></span>
+  <span class="hint">⌘↩ send</span>
+  <span id="approve-area"></span>
+  <button class="primary" id="send" type="button" disabled>Send to Agent</button>
+</footer>
+
+<script>
+"use strict";
+// Jira content is untrusted: every dynamic value goes through esc() before it touches innerHTML.
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const CHECK = '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10" fill="currentColor"/><path d="M6 10.4l2.6 2.6L14 7.4" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const TOPICS = ["Scope boundary", "Definition of done", "Technical dependencies", "Sequencing constraints", "Parallel capacity", "Risk / unknowns", "Team structure", "Parent structure"];
+const SIZES = [1, 2, 3, 5, 8, 13, 21];
+const GONE_AFTER_MS = 3000;
+
+let S = null, raw = null, selected = null, view = "interview", storeKey = null;
+let lastOk = Date.now(), gone = false, closed = false;
+let knownQ = null; // question ids seen so far; a new open one means the agent posted a new batch
+let local = fresh();
+function fresh() { return { staged: {}, pending: [], drafts: {}, reviewed: false, planShown: false, fileShown: false }; }
+function load() { local = fresh(); try { const v = localStorage.getItem(storeKey); if (v) local = Object.assign(fresh(), JSON.parse(v)); } catch {} }
+function save() { try { localStorage.setItem(storeKey, JSON.stringify(local)); } catch {} }
+
+// ---- data helpers ----
+// Agents sometimes send {item, mitigation} objects where a string is expected; never print "[object Object]".
+const flat = (x) => {
+  if (x == null) return "";
+  if (typeof x !== "object") return String(x);
+  if (Array.isArray(x)) return x.map(flat).join("; ");
+  const main = x.risk || x.item || x.title || x.text || x.description || x.summary || x.criterion || x.criteria || x.requirement || x.statement || x.name;
+  const rest = Object.entries(x).filter(([k, v]) => v && typeof v !== "object" && v !== main && !["risk", "item", "title", "text", "description", "summary", "criterion", "criteria", "requirement", "statement", "name"].includes(k));
+  return [main, ...rest.map(([k, v]) => `${k[0].toUpperCase()}${k.slice(1)}: ${v}`)].filter(Boolean).join(" — ");
+};
+const qs = () => (S && Array.isArray(S.questions) ? S.questions : []);
+const plan = () => (S && S.plan && typeof S.plan === "object" ? S.plan : null);
+const items = () => (plan() && Array.isArray(plan().items) ? plan().items : []);
+const qById = (id) => qs().find((q) => q.id === id);
+const iById = (id) => items().find((i) => i.id === id);
+const isOpen = (q) => q.status === "open" || q.status === "reopened";
+const curRound = () => qs().reduce((m, q) => Math.max(m, Number(q.round) || 0), 0);
+const rounds = () => { const m = new Map(); for (const q of qs()) { const r = Number(q.round) || 0; if (!m.has(r)) m.set(r, []); m.get(r).push(q); } return [...m.entries()].sort((a, b) => a[0] - b[0]); };
+const firstOpen = () => qs().filter((q) => isOpen(q) && Number(q.round) === curRound())[0] || qs().find(isOpen) || qs()[qs().length - 1] || null;
+const locked = () => !!(S && S.finished);
+const handled = () => Number(((S || {}).agent || {}).handled) || 0;
+// Busy is decided by sequence numbers only: agent.status is informational and may be stale.
+const busy = () => !!S && (Number(S._seq) || 0) > handled();
+const preparing = () => !!S && !qs().length && !plan();
+const itemKey = (sel) => String(sel).replace(/^item:/, "");
+// Last sent-but-unhandled action of a type for a key: sent answers stay on screen until the agent records them.
+const pendingLast = (key, type) => { const l = pendingFor(key).filter((a) => a.type === type); return l.length ? l[l.length - 1] : null; };
+const sizeOf = (i) => {
+  const s = local.staged["item:" + i.id];
+  if (s && s.size != null) return s.size;
+  const p = pendingLast("item:" + i.id, "item-size");
+  return p ? p.size : i.size;
+};
+
+// ---- polling ----
+async function poll() {
+  if (closed) return;
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    if (!r.ok) throw new Error(String(r.status));
+    const text = await r.text();
+    lastOk = Date.now();
+    if (gone) { gone = false; render(); }
+    if (text !== raw) { raw = text; const next = JSON.parse(text); if (next && next.ticket) { S = next; onState(); } }
+  } catch {
+    if (!gone && Date.now() - lastOk > GONE_AFTER_MS) { gone = true; render(); }
+  }
+  setTimeout(poll, 1000);
+}
+function onState() {
+  const key = "jira-refine:" + (S.created || "");
+  if (key !== storeKey) { storeKey = key; load(); }
+  const h = handled();
+  const still = local.pending.filter((p) => p.seq > h);
+  if (still.length !== local.pending.length) { local.pending = still; save(); }
+  if (S.phase === "review" && plan() && !local.planShown) { local.planShown = true; view = "plan"; selected = "overview"; save(); }
+  if (!plan() && view === "plan") view = "interview";
+  if (locked() && !planFile) loadPlanFile();
+  if (locked() && !local.fileShown) { local.fileShown = true; view = "file"; save(); }
+  // A new batch arrived: land on its first question instead of leaving the user on an old one.
+  let jumped = false;
+  if (knownQ && view === "interview" && !stagedCount()) {
+    const fresh = qs().filter((q) => !knownQ.has(q.id) && isOpen(q)).sort((a, b) => (Number(a.round) || 0) - (Number(b.round) || 0));
+    if (fresh.length) { selected = fresh[0].id; jumped = true; }
+  }
+  knownQ = new Set(qs().map((q) => q.id));
+  ensureSelection();
+  const a = document.activeElement;
+  if (a && a.tagName === "TEXTAREA" && !jumped) { renderChrome(); renderNav(); renderFooter(); } else { if (jumped && a && a.blur) a.blur(); render(); if (jumped) { $("main").scrollTop = 0; $("nav").querySelector(".item.selected")?.scrollIntoView({ block: "nearest" }); } }
+}
+function ensureSelection() {
+  if (view === "file") { selected = "file"; return; }
+  if (view === "plan") { if (selected !== "overview" && !iById(itemKey(selected))) selected = "overview"; return; }
+  if (selected === "ticket" || (selected && qById(selected))) return;
+  selected = (firstOpen() || {}).id || "ticket";
+}
+
+// ---- staging ----
+const st = (key) => (local.staged[key] = local.staged[key] || {});
+const prune = (key) => { const s = local.staged[key]; if (s && !s.answer && !s.defer && !s.reopen && s.size == null && !(s.thread && s.thread.length)) delete local.staged[key]; };
+const commit = () => { save(); render(); };
+// After staging an answer/defer, jump to the next question still waiting for one (in list order, wrapping).
+function advanceFrom(id) {
+  const flat = rounds().flatMap(([, l]) => l);
+  const idx = flat.findIndex((q) => q.id === id);
+  const waiting = (q) => isOpen(q) && !(local.staged[q.id] && (local.staged[q.id].answer || local.staged[q.id].defer));
+  const next = flat.slice(idx + 1).find(waiting) || flat.slice(0, idx).find(waiting);
+  if (next) selected = next.id;
+  commit();
+  const m = $("main"); if (m) m.scrollTop = 0;
+}
+const pendingFor = (key) => local.pending.flatMap((p) => p.actions.filter((a) => a.key === key));
+function stagedCount() {
+  let n = 0;
+  for (const s of Object.values(local.staged)) n += (s.answer ? 1 : 0) + (s.defer ? 1 : 0) + (s.reopen ? 1 : 0) + (s.size != null ? 1 : 0) + (s.thread ? s.thread.length : 0);
+  return n;
+}
+const stagedNonSize = () => Object.values(local.staged).some((s) => s.answer || s.defer || s.reopen || (s.thread && s.thread.length));
+function buildActions() {
+  const out = [];
+  for (const [key, s] of Object.entries(local.staged)) {
+    if (key === "plan") { for (const t of s.thread || []) out.push({ type: "plan-feedback", text: t, key }); continue; }
+    if (key.startsWith("item:")) {
+      const id = itemKey(key);
+      if (s.size != null) out.push({ type: "item-size", item: id, size: s.size, key });
+      for (const t of s.thread || []) out.push({ type: "item-comment", item: id, text: t, key });
+      continue;
+    }
+    if (s.reopen) out.push({ q: key, type: "reopen", key });
+    if (s.defer) out.push({ q: key, type: "defer", key });
+    if (s.answer) { const a = { q: key, type: "answer", kind: s.answer.kind, key }; if (s.answer.option) a.option = s.answer.option; if (s.answer.text) a.text = s.answer.text; out.push(a); }
+    for (const t of s.thread || []) out.push({ q: key, type: "thread", text: t, key });
+  }
+  return out;
+}
+const wire = (actions) => actions.map(({ key, ...a }) => a); // `key` is page-local
+
+function sendState() {
+  if (locked() || gone || !stagedCount() || busy()) return { disabled: true, why: gone ? "server gone" : "" };
+  return { disabled: false, why: "" };
+}
+async function post(actions) {
+  let r, j = null;
+  try { r = await fetch("/api/send", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ actions: wire(actions) }) }); j = await r.json().catch(() => null); } catch { r = null; }
+  if (!j || !j.seq) { $("send-why").textContent = "Send failed: " + ((r && r.status) || "no server"); return null; }
+  return j;
+}
+const approving = () => local.pending.some((p) => p.actions.some((a) => a.type === "approve"));
+async function shipped(actions) {
+  const j = await post(actions);
+  if (!j) return;
+  local.pending.push({ seq: j.seq, at: new Date().toISOString(), actions });
+  local.staged = {}; if (!actions.some((a) => a.type === "approve")) local.reviewed = false;
+  if (S) S._seq = Math.max(Number(S._seq) || 0, j.seq); // lock immediately, before the next poll
+  commit();
+}
+function send() { if (!sendState().disabled) shipped(buildActions()); }
+function approve() {
+  if (busy() || locked() || approving() || !local.reviewed || stagedNonSize()) return;
+  if (!confirm("Approve this plan and write the file?")) return;
+  const sizes = {};
+  for (const i of items()) sizes[i.id] = sizeOf(i);
+  shipped([{ type: "approve", sizes, sizesReviewed: true }]);
+}
+
+// ---- markdown (small, safe: escapes everything first; only http(s)/mailto links) ----
+const PH = ""; // private-use placeholder, cannot occur in escaped text
+function mdInline(src) {
+  const codes = [];
+  let t = String(src).replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return PH + (codes.length - 1) + PH; });
+  t = esc(t);
+  t = t.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, txt, url) => /^(https?:\/\/|mailto:)/i.test(url.replace(/&amp;/g, "&")) ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${txt}</a>` : m);
+  t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*\w])\*([^*\s][^*]*)\*(?!\w)/g, "$1<em>$2</em>").replace(/(^|[^\w])_([^_\s][^_]*)_(?!\w)/g, "$1<em>$2</em>").replace(/~~([^~]+)~~/g, "<del>$1</del>");
+  return t.replace(new RegExp(PH + "(\\d+)" + PH, "g"), (_, i) => `<code>${esc(codes[Number(i)])}</code>`);
+}
+function mdToHtml(src) {
+  const L = String(src).replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+  const row = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const isSep = (l) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l) && l.includes("-");
+  const LI = /^\s*([-*+]|\d+[.)])\s+/;
+  while (i < L.length) {
+    const l = L[i];
+    if (/^\s*$/.test(l)) { i++; continue; }
+    let m;
+    if (/^\s*```/.test(l)) { const buf = []; i++; while (i < L.length && !/^\s*```/.test(L[i])) buf.push(L[i++]); i++; out.push(`<pre><code>${esc(buf.join("\n"))}</code></pre>`); continue; }
+    if ((m = l.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/))) { out.push(`<h${m[1].length}>${mdInline(m[2])}</h${m[1].length}>`); i++; continue; }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { out.push("<hr>"); i++; continue; }
+    if (l.includes("|") && i + 1 < L.length && isSep(L[i + 1])) {
+      const head = row(l); i += 2; const rows = [];
+      while (i < L.length && L[i].includes("|") && !/^\s*$/.test(L[i])) rows.push(row(L[i++]));
+      out.push(`<table><thead><tr>${head.map((c) => `<th>${mdInline(c)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${mdInline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`); continue;
+    }
+    if (/^\s*>/.test(l)) { const buf = []; while (i < L.length && /^\s*>/.test(L[i])) buf.push(L[i++].replace(/^\s*>\s?/, "")); out.push(`<blockquote>${mdToHtml(buf.join("\n"))}</blockquote>`); continue; }
+    if (LI.test(l)) {
+      const stack = []; // [{tag, indent}]
+      while (i < L.length && (LI.test(L[i]) || (/^\s+\S/.test(L[i]) && stack.length))) {
+        const lm = L[i].match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+        if (!lm) { out.push(" " + mdInline(L[i].trim())); i++; continue; } // continuation line
+        const ind = lm[1].replace(/\t/g, "  ").length, tag = /\d/.test(lm[2]) ? "ol" : "ul";
+        while (stack.length && ind < stack[stack.length - 1].indent) out.push(`</li></${stack.pop().tag}>`);
+        if (!stack.length || ind > stack[stack.length - 1].indent) { stack.push({ tag, indent: ind }); out.push(`<${tag}><li>`); }
+        else out.push("</li><li>");
+        let body = lm[3]; const cb = body.match(/^\[([ xX])\]\s+(.*)$/);
+        if (cb) body = (cb[1] === " " ? "☐ " : "☑ ") + cb[2];
+        out.push(mdInline(body)); i++;
+      }
+      while (stack.length) out.push(`</li></${stack.pop().tag}>`);
+      continue;
+    }
+    const buf = [];
+    while (i < L.length && !/^\s*$/.test(L[i]) && !/^(#{1,6}\s|\s*```|\s*>)/.test(L[i]) && !LI.test(L[i]) && !(L[i].includes("|") && i + 1 < L.length && isSep(L[i + 1]))) buf.push(L[i++]);
+    if (!buf.length) { buf.push(L[i++]); }
+    out.push(`<p>${buf.map((x) => mdInline(x.trim())).join("<br>")}</p>`);
+  }
+  return out.join("\n");
+}
+
+let planFile = null; // { file, content } once loaded
+async function loadPlanFile() {
+  try { const r = await fetch("/api/plan", { cache: "no-store" }); if (r.ok) { planFile = await r.json(); render(); } } catch {}
+}
+
+// Tell the user, in plain words, when a Send is not being picked up.
+function deliveryHint() {
+  const last = local.pending[local.pending.length - 1];
+  if (!last || !busy() || !S) return "";
+  const p = S._push, age = Math.round((Date.now() - Date.parse(last.at || 0)) / 1000);
+  if (p && p.ok === false) return `Couldn't reach opencode (${p.error}). Type "continue" in opencode to wake the agent.`;
+  if (age > 60) return p ? `Delivered ${age}s ago but the agent hasn't answered — check opencode.` : `The agent isn't listening. Type "continue" in opencode to wake it.`;
+  return "";
+}
+
+async function closeSession() {
+  if (!confirm("Close this session? The web server stops; the plan file stays on disk.")) return;
+  try {
+    const r = await fetch("/api/close", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    if (!r.ok) throw new Error(String(r.status));
+  } catch (e) { $("send-why").textContent = "Close failed: " + e.message; return; }
+  closed = true;
+  document.body.innerHTML = `<div style="grid-column:1/-1;grid-row:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center"><h1 style="font-family:var(--serif);font-weight:500">Session closed</h1><p style="color:var(--ink-2)">The web server has stopped. The plan is saved at <b>${esc(planFile ? planFile.file : ((S && S.finished) || {}).file || "")}</b>.<br>You can close this tab.</p></div>`;
+}
+
+// ---- rendering ----
+function render() { if (!S) return; renderChrome(); renderNav(); renderMain(); renderAside(); renderFooter(); }
+function renderChrome() {
+  const t = S.ticket || {};
+  $("title").textContent = t.summary ? `${t.key} — ${t.summary}` : t.key || "jira-refine";
+  document.title = `${t.key || "jira-refine"} · refine`;
+  const tabs = [["interview", "Interview"]]; if (plan()) tabs.push(["plan", "Plan"]); if (locked()) tabs.push(["file", "Plan file"]);
+  $("tabs").innerHTML = tabs.map(([id, l]) => `<button data-act="tab" data-id="${id}" class="${view === id ? "on" : ""}">${l}</button>`).join("");
+  const working = busy() || preparing();
+  $("agent-dot").className = "dot" + (gone ? " gone" : working ? " working" : "");
+  $("agent-status").innerHTML = gone ? "server gone" : preparing() ? '<span class="spin"></span> preparing questions…' : busy() ? '<span class="spin"></span> agent working…' : "waiting for you";
+  document.querySelector("header").classList.toggle("working", working && !gone);
+  const b = $("banner");
+  if (S.finished) { b.className = "show done"; b.textContent = `Done — plan written to ${S.finished.file || S.finished.path || "file"}.`; }
+  else if (approving()) { b.className = "show"; b.textContent = "Approved — the agent is writing the plan file…"; }
+  else if (S.note) { b.className = "show"; b.textContent = S.note; }
+  else b.className = "";
+}
+function markFor(q) {
+  const s = local.staged[q.id];
+  if (s && (s.answer || s.defer || s.reopen)) return `<span class="mark staged">staged</span>`;
+  if (pendingFor(q.id).length) return `<span class="mark pending"><span class="spin"></span></span>`;
+  if (q.status === "answered") return `<span class="mark answered">${CHECK}</span>`;
+  return `<span class="mark ${esc(q.status)}">${q.status === "deferred" ? "deferred" : "open"}</span>`;
+}
+function renderNav() {
+  const nav = $("nav");
+  const y = nav.scrollTop;
+  let h = "";
+  if (view === "file") {
+    h += `<div class="round"><span>Written file</span></div><div class="item selected"><span class="id">md</span><span class="t">${esc(planFile ? planFile.file : (S.finished || {}).file || "")}</span><span></span></div>`;
+  } else if (view === "plan") {
+    h += `<div class="item ${selected === "overview" ? "selected" : ""}" data-act="sel" data-id="overview"><span class="id"></span><span class="t">Overview</span><span></span></div>`;
+    const groups = new Map();
+    for (const i of items()) { const g = i.team || ""; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(i); }
+    for (const [team, list] of groups) {
+      h += `<div class="round"><span>${esc(team || "Items")}</span></div>`;
+      for (const i of list) {
+        const ch = local.staged["item:" + i.id] && local.staged["item:" + i.id].size != null;
+        h += `<div class="item ${selected === "item:" + i.id ? "selected" : ""}" data-act="sel" data-id="item:${esc(i.id)}"><span class="id">${esc(i.id)}</span><span class="t">${esc(i.title)}</span><span class="mark ${ch ? "staged" : ""}">${esc(sizeOf(i))}</span></div>`;
+      }
+    }
+  } else {
+    const cov = TOPICS.map((name, i) => {
+      const mine = qs().filter((q) => q.topic === i + 1);
+      const done = (mine.length && mine.every((q) => q.status === "answered" || q.status === "deferred")) || (S.covered || []).includes(i + 1);
+      return `<div class="row ${done ? "done" : ""}"><span class="m">${done ? "✓" : mine.length ? "…" : "○"}</span>${esc(name)}</div>`;
+    }).join("");
+    h += `<div class="round"><span>Coverage</span></div><div class="cov">${cov}</div>`;
+    h += `<div class="round"><span>Ticket</span></div><div class="item ${selected === "ticket" ? "selected" : ""}" data-act="sel" data-id="ticket"><span class="id">i</span><span class="t">Ticket description &amp; existing work</span><span></span></div>`;
+    const cur = curRound();
+    for (const [r, list] of rounds()) {
+      h += `<div class="round ${r === cur ? "current" : ""}"><span>Round ${r}</span><span>${list.filter((q) => q.status === "answered").length}/${list.length}</span></div>`;
+      for (const q of list) {
+        h += `<div class="item ${selected === q.id ? "selected" : ""} ${q.updated ? "updated" : ""}" data-act="sel" data-id="${esc(q.id)}"><span class="id">${esc(String(q.id).toUpperCase())}</span><span class="t">${esc(q.title)}</span>${markFor(q)}</div>`;
+      }
+    }
+  }
+  nav.innerHTML = h; nav.scrollTop = y;
+}
+
+function renderMain() {
+  const m = $("main");
+  const y = m.scrollTop;
+  if (view === "file") m.innerHTML = planFile ? `<div class="md">${mdToHtml(planFile.content)}</div>` : `<div class="empty">Loading the plan file…</div>`;
+  else if (view === "plan") m.innerHTML = selected === "overview" ? overviewHtml() : itemHtml(iById(itemKey(selected)));
+  else if (selected === "ticket") m.innerHTML = ticketHtml();
+  else if (qById(selected)) m.innerHTML = questionHtml(qById(selected));
+  else m.innerHTML = `<div class="empty">${preparing() ? "The agent is preparing the first questions…" : "Nothing selected."}</div>`;
+  m.scrollTop = y;
+  restoreDrafts();
+}
+function ticketHtml() {
+  const t = S.ticket || {};
+  const ex = t.existing || [];
+  return `<div class="card"><div class="crumb"><span>${esc(t.key)}</span></div><h2>${esc(t.summary || t.key)}</h2>
+    <p class="body">${esc(t.description || "No description.")}</p>
+    ${ex.length ? `<h3>Already filed underneath</h3><table class="t">${ex.map((e) => `<tr><td>${esc(e.key)}</td><td>${esc(e.summary)}</td><td>${esc(e.status || "")}</td></tr>`).join("")}</table>` : ""}</div>`;
+}
+function questionHtml(q) {
+  const s = local.staged[q.id] || {};
+  const open = isOpen(q);
+  const a = q.answer;
+  const rec = q.rec || {};
+  const pa = !s.answer && open ? pendingLast(q.id, "answer") : null; // sent, agent hasn't recorded it yet
+  const pd = !s.defer && !s.answer && open && pendingLast(q.id, "defer");
+  const shown = s.answer || pa || (!open ? a : null);
+  const picked = !!(shown || s.defer || pd);
+  const pickOf = (x) => (x ? (x.kind === "accept" ? rec.option : x.option) : null);
+  const chosenOpt = pickOf(shown);
+  const optKnown = (q.options || []).some((o) => o.k === chosenOpt);
+  const textAns = shown && shown.kind === "text" ? shown.text : (shown && chosenOpt && !optKnown ? `${chosenOpt}${q.options && q.options.length ? "" : " (option text no longer recorded)"}` : null);
+  const isStaged = !!s.answer, isSent = !!pa;
+  let opts = (q.options || []).map((o) => {
+    const isRec = rec.option === o.k, ch = chosenOpt === o.k;
+    return `<li class="opt ${isRec ? "rec" : ""} ${ch ? (isStaged ? "staged" : isSent ? "sent" : "chosen") : ""}" data-act="opt" data-q="${esc(q.id)}" data-k="${esc(o.k)}"><span class="k">${esc(o.k)}</span><div>${isRec ? '<div class="tag">Recommended</div>' : ""}${esc(o.text)}</div><span class="check">${CHECK}</span></li>`;
+  }).join("");
+  if (textAns != null) opts += `<li class="opt text-answer ${isStaged ? "staged" : isSent ? "sent" : "chosen"}"><span class="k">✎</span><div><div class="tag">${isStaged ? "Your answer (staged)" : isSent ? "Your answer (sent)" : "Your answer"}</div>${esc(textAns)}</div><span class="check">${CHECK}</span></li>`;
+  const recText = rec.text ? `<p class="why"><b>Recommendation:</b> ${esc(rec.text)}</p>` : "";
+  const why = rec.why ? `<p class="why">${rec.option ? `<b>Why ${esc(rec.option)}:</b> ` : ""}${esc(rec.why)}</p>` : "";
+  const undo = `<a data-act="clear" data-q="${esc(q.id)}">undo</a>`;
+  const sentLine = (pa || pd) ? `<div class="staged-line"><span class="spin"></span> Sent — waiting for the agent to record it</div>` : "";
+  const stagedLine = sentLine || (s.defer ? `<div class="staged-line">Staged: defer ${undo}</div>` : s.reopen ? `<div class="staged-line">Staged: reopen ${undo}</div>` : s.answer ? `<div class="staged-line">Staged answer ${undo}</div>` : "");
+  const topic = q.topic ? TOPICS[q.topic - 1] : "";
+  let controls = "";
+  if (!locked()) {
+    if (open) controls = `<div class="answer-row"><textarea data-draft="${esc(q.id)}:answer" placeholder="Or answer in your own words…"></textarea><button data-act="answer-text" data-q="${esc(q.id)}">Stage</button></div>
+      <div class="links">${rec.option || rec.text ? `<a data-act="accept" data-q="${esc(q.id)}">Accept recommendation</a>` : ""}<a data-act="defer" data-q="${esc(q.id)}">Defer</a></div>`;
+    else controls = `<div class="links"><a data-act="reopen" data-q="${esc(q.id)}">Reopen</a></div>`;
+  }
+  return `<div class="card ${picked ? "picked" : ""} ${locked() ? "locked" : ""}"><div class="crumb"><span>${esc(String(q.id).toUpperCase())}</span>${topic ? `<span>${esc(topic)}</span>` : ""}<span>round ${esc(q.round || 1)}</span><span>${esc(q.status)}</span>${q.updated ? '<span class="upd">recommendation updated</span>' : ""}</div>
+    <h2>${esc(q.title)}</h2>${q.body ? `<p class="body">${esc(q.body)}</p>` : ""}
+    ${opts ? `<ul class="opts">${opts}</ul>` : ""}${recText}${why}${stagedLine}${controls}</div>`;
+}
+function overviewHtml() {
+  const p = plan(), its = items();
+  const counts = {}; its.forEach((i) => { counts[i.type] = (counts[i.type] || 0) + 1; });
+  const pts = its.reduce((n, i) => n + (Number(sizeOf(i)) || 0), 0);
+  const stat = (n, l) => `<div><b>${esc(n)}</b><span>${esc(l)}</span></div>`;
+  const ex = p.existing || [];
+  return `<div class="card"><div class="crumb"><span>Plan overview</span></div><h2>${esc((S.ticket || {}).key || "")} breakdown</h2>
+    <p class="body">${esc(p.summary || "")}</p>
+    <h3>Counts</h3><div class="stats">${stat(its.length, its.length === 1 ? "item" : "items")}${Object.entries(counts).map(([k, v]) => stat(v, k.toLowerCase() + (v > 1 ? "s" : ""))).join("")}${stat(pts, "points")}</div>
+    ${ex.length ? `<h3>Existing linked / child work</h3><table class="t">${ex.map((e) => `<tr><td>${esc(e.key)}</td><td>${esc(e.summary)}</td><td>${esc(e.status || "")}</td></tr>`).join("")}</table>` : ""}
+    <h3>Dependencies</h3><table class="t"><tr><th>Id</th><th>Title</th><th>Depends on</th><th>Pts</th></tr>${its.map((i) => `<tr><td>${esc(i.id)}</td><td>${esc(i.title)}</td><td>${esc((i.depends_on || []).join(", ") || "none")}</td><td>${esc(sizeOf(i))}</td></tr>`).join("")}</table>
+    ${(p.risks || []).length ? `<h3>Open questions / risks</h3><ul>${p.risks.map((r) => `<li>${esc(flat(r))}</li>`).join("")}</ul>` : ""}
+    <div class="callout">Sizes are the agent's guesses at your team's velocity. Open each item to adjust its points, then tick “I reviewed every size” and approve.</div></div>`;
+}
+function itemHtml(i) {
+  if (!i) return `<div class="empty">Nothing selected.</div>`;
+  const s = local.staged["item:" + i.id] || {};
+  const cur = sizeOf(i);
+  const btns = SIZES.map((n) => `<button data-act="size" data-i="${esc(i.id)}" data-n="${n}" class="${n === cur ? (s.size != null ? "staged" : "chosen") : ""}" ${locked() ? "disabled" : ""}>${n}</button>`).join("");
+  const ac = i.acceptance_criteria || [];
+  return `<div class="card"><div class="crumb"><span>${esc(i.id)}</span>${i.team ? `<span>owner: ${esc(i.team)}</span>` : ""}${i.parent ? `<span>parent: ${esc(i.parent)}</span>` : ""}</div>
+    <div class="type" style="margin-top:8px">${esc(i.type)}</div><h2 style="margin-top:2px">${esc(i.title)}</h2>
+    <p class="body">${esc(i.description || "")}</p>
+    ${i.approach ? `<h3>Technical approach</h3><p class="body">${esc(i.approach)}</p>` : ""}
+    ${ac.length ? `<h3>Acceptance criteria</h3><ul>${ac.map((x) => `<li>${esc(flat(x))}</li>`).join("")}</ul>` : ""}
+    ${i.verification ? `<h3>Verification</h3><p class="body">${esc(i.verification)}</p>` : ""}
+    <h3>Depends on</h3><p class="body">${esc((i.depends_on || []).join(", ") || "none")}</p>
+    <h3>Story points${s.size != null ? ` (was ${esc(i.size)})` : ""}</h3><div class="sizes">${btns}</div>
+    ${Number(cur) >= 13 ? `<div class="callout">13 or more is a signal this isn't one shippable piece. Comment on the right to ask for a split.</div>` : ""}</div>`;
+}
+
+function renderAside() {
+  const a = $("aside");
+  if (view === "file") {
+    a.innerHTML = `<div class="head"><h3>Plan file</h3><div class="sub">${esc(planFile ? planFile.file : "")}</div></div><div class="msgs"><div class="empty-thread">Refinement is finished. This is the file the agent wrote, rendered from Markdown. Edit it on disk and press Reload.</div></div><div class="compose"><button data-act="copy-md">Copy Markdown</button><button data-act="reload-md">Reload file</button></div>`;
+    return;
+  }
+  let key = null, sub = "", msgs = [], placeholder = "Discuss…", label = "Stage message";
+  if (view === "plan") {
+    if (selected === "overview") { key = "plan"; sub = "Plan feedback"; placeholder = "Ask for a split, merge, re-scope, re-parent…"; label = "Stage feedback"; }
+    else { const i = iById(itemKey(selected)); if (i) { key = "item:" + i.id; sub = `${i.id} — ${i.title}`; msgs = i.thread || []; placeholder = "Comment on this item…"; } }
+  } else if (selected !== "ticket" && qById(selected)) { const q = qById(selected); key = q.id; sub = q.title; msgs = q.thread || []; placeholder = "Question or push-back on this one…"; }
+  if (!key) { a.innerHTML = `<div class="head"><h3>Discussion</h3><div class="sub">Select a question</div></div><div></div><div></div>`; return; }
+  const staged = (local.staged[key] || {}).thread || [];
+  const pend = pendingFor(key).filter((x) => x.type === "thread" || x.type === "item-comment" || x.type === "plan-feedback");
+  let body = msgs.map((m) => `<div class="msg ${m.who === "agent" ? "agent" : "user"}"><div class="who">${m.who === "agent" ? "Agent" : "You"}</div><div class="text">${esc(m.text)}</div></div>`).join("");
+  body += pend.map((x) => `<div class="msg user pending"><div class="who"><span class="spin"></span>Sent</div><div class="text">${esc(x.text)}</div></div>`).join("");
+  body += staged.map((t, n) => `<div class="msg user staged"><div class="who">Staged</div><div class="text">${esc(t)}</div><a class="rm" data-act="rm" data-key="${esc(key)}" data-n="${n}">✕</a></div>`).join("");
+  if (!body) body = `<div class="empty-thread">${key === "plan" ? "Nothing yet. The agent revises the plan when you send feedback." : "No discussion yet."}</div>`;
+  a.innerHTML = `<div class="head"><h3>Discussion</h3><div class="sub">${esc(sub)}</div></div><div class="msgs">${body}</div>
+    ${locked() ? "<div></div>" : `<div class="compose"><textarea data-draft="${esc(key)}:thread" placeholder="${esc(placeholder)}"></textarea><button data-act="stage-msg" data-key="${esc(key)}">${label}</button></div>`}`;
+  restoreDrafts();
+}
+function renderFooter() {
+  const n = stagedCount();
+  const last = local.pending[local.pending.length - 1];
+  const sent = last && busy() ? `<span style="color:var(--stage)"><span class="spin"></span> Send #${esc(last.seq)} waiting for the agent</span> · ` : "";
+  $("staged-list").innerHTML = sent + (n ? `<b>${n}</b> staged` : "Nothing staged");
+  const b = $("send");
+  b.disabled = sendState().disabled;
+  b.textContent = n ? `Send ${n} to Agent` : "Send to Agent";
+  const why = $("send-why");
+  if (!why.textContent.startsWith("Send failed") || n === 0) why.textContent = sendState().why || deliveryHint();
+  const ap = $("approve-area");
+  if (locked()) {
+    ap.innerHTML = `<button id="close-session" data-act="close">Close session</button>`;
+  } else if (approving() && !locked()) {
+    ap.innerHTML = `<span style="color:var(--stage)"><span class="spin"></span> Approval sent — the agent is writing the plan file…</span>`;
+  } else if (view === "plan" && !locked()) {
+    const blocked = busy() || !local.reviewed || stagedNonSize();
+    ap.innerHTML = `<label><input type="checkbox" id="reviewed" ${local.reviewed ? "checked" : ""}> I reviewed every size</label> <button id="approve" data-act="approve" class="${blocked ? "" : "ready"}" ${blocked ? "disabled" : ""} title="${stagedNonSize() ? "Send your staged comments first" : ""}">Approve &amp; write file</button>`;
+  } else ap.innerHTML = "";
+}
+
+// ---- drafts (survive re-render) ----
+function restoreDrafts() { for (const t of document.querySelectorAll("textarea[data-draft]")) { const v = local.drafts[t.dataset.draft]; if (v) t.value = v; } }
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.matches && t.matches("textarea[data-draft]")) { local.drafts[t.dataset.draft] = t.value; if (!t.value) delete local.drafts[t.dataset.draft]; save(); }
+});
+document.addEventListener("change", (e) => { if (e.target.id === "reviewed") { local.reviewed = e.target.checked; save(); renderFooter(); } });
+
+// ---- actions ----
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]"); if (!el || !S) return;
+  const d = el.dataset, act = d.act;
+  if (act === "tab") { view = d.id; selected = view === "plan" ? "overview" : null; ensureSelection(); return render(); }
+  if (act === "sel") { selected = d.id; return render(); }
+  if (act === "approve") return approve();
+  if (act === "close") return closeSession();
+  if (act === "reload-md") return loadPlanFile();
+  if (act === "copy-md") { try { navigator.clipboard.writeText(planFile ? planFile.content : ""); el.textContent = "Copied"; } catch {} return; }
+  if (locked()) return;
+  if (act === "opt") { const s = st(d.q); s.answer = { kind: "option", option: d.k }; delete s.defer; delete s.reopen; return advanceFrom(d.q); }
+  if (act === "accept") { const s = st(d.q); s.answer = { kind: "accept" }; delete s.defer; delete s.reopen; return advanceFrom(d.q); }
+  if (act === "defer") { const s = st(d.q); s.defer = true; delete s.answer; delete s.reopen; return advanceFrom(d.q); }
+  if (act === "reopen") { const s = st(d.q); s.reopen = true; delete s.answer; delete s.defer; return commit(); }
+  if (act === "clear") { const s = local.staged[d.q]; if (s) { delete s.answer; delete s.defer; delete s.reopen; prune(d.q); } return commit(); }
+  if (act === "answer-text") {
+    const k = d.q + ":answer", v = (local.drafts[k] || "").trim(); if (!v) return;
+    const s = st(d.q); s.answer = { kind: "text", text: v }; delete s.defer; delete s.reopen; delete local.drafts[k]; return advanceFrom(d.q);
+  }
+  if (act === "size") {
+    const it = iById(d.i); if (!it) return;
+    const s = st("item:" + d.i), n = Number(d.n);
+    if (n === it.size) delete s.size; else s.size = n;
+    prune("item:" + d.i); return commit();
+  }
+  if (act === "stage-msg") {
+    const k = d.key + ":thread", v = (local.drafts[k] || "").trim(); if (!v) return;
+    const s = st(d.key); (s.thread = s.thread || []).push(v); delete local.drafts[k]; return commit();
+  }
+  if (act === "rm") { const s = local.staged[d.key]; if (s && s.thread) { s.thread.splice(Number(d.n), 1); prune(d.key); } return commit(); }
+});
+$("send").addEventListener("click", send);
+document.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(); });
+setInterval(() => { if (S) renderFooter(); }, 5000);
+// ---- text size: user multiplier on top of the width-based base size ----
+const SCALE_KEY = "jira-refine-ui:scale";
+let scale = 1;
+try { scale = Math.min(1.8, Math.max(0.7, Number(localStorage.getItem(SCALE_KEY)) || 1)); } catch {}
+function applyScale() {
+  document.documentElement.style.fontSize = scale === 1 ? "" : `calc(clamp(16px, 0.55vw + 8px, 28px) * ${scale})`;
+  try { localStorage.setItem(SCALE_KEY, String(scale)); } catch {}
+}
+function stepScale(d) { scale = Math.min(1.8, Math.max(0.7, Math.round((scale + d) * 100) / 100)); applyScale(); }
+$("zoom-in").addEventListener("click", () => stepScale(0.1));
+$("zoom-out").addEventListener("click", () => stepScale(-0.1));
+$("zoom-in").addEventListener("dblclick", () => { scale = 1; applyScale(); });
+applyScale();
+poll();
+</script>
+</body>
+</html>

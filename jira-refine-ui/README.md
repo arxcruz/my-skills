@@ -1,11 +1,10 @@
-# jira-refine
+# jira-refine-ui
 
-A portable skill for refining a Jira ticket into a parallelizable epic /
-story / task / spike breakdown. See `SKILL.md` for the full instructions —
+The web-UI version of [`jira-refine`](../jira-refine/): a portable skill for
+refining a Jira ticket into a parallelizable epic / story / task / spike
+breakdown, with the interview and plan review on a local browser page. Prefer
+the terminal? Use [`jira-refine`](../jira-refine/) instead. See `SKILL.md` for the full instructions —
 it's the file any agent tool actually reads.
-
-This is the terminal-only version. For a browser-based interview and plan
-review, see [`jira-refine-ui`](../jira-refine-ui/).
 
 > [!CAUTION]
 > ## VERY IMPORTANT — lock Jira to read-only before you use this
@@ -37,10 +36,37 @@ review, see [`jira-refine-ui`](../jira-refine-ui/).
 From the repo root, use the generic installer (see [`../install.sh`](../install.sh)):
 
 ```
-../install.sh jira-refine                 # symlink into ~/.claude/skills and ~/.config/opencode/skills
-../install.sh jira-refine --agent claude  # just Claude Code
-../install.sh jira-refine --target /path/to/some/other/tools/skills/dir
+../install.sh jira-refine-ui                 # symlink into ~/.claude/skills and ~/.config/opencode/skills
+../install.sh jira-refine-ui --agent claude  # just Claude Code
+../install.sh jira-refine-ui --target /path/to/some/other/tools/skills/dir
 ```
+
+## How it works
+
+The skill always runs in web mode. It starts a local server (`server.mjs`, Node 20+, no dependencies) bound to
+127.0.0.1 and gives you a page with the 8-topic coverage checklist, question
+cards (options, recommendation, discussion thread, defer/reopen), and a plan
+tab where you edit Fibonacci sizes, comment per item, request changes or
+approve. Everything is staged until you press **Send to Agent**. Details for
+the agent are in [`WEB.md`](WEB.md); session state lives in
+`.jira-refine/` in the working directory (consider gitignoring it).
+
+When the plan is approved and written, the page adds a **Plan file** tab that
+renders the finished Markdown (tables, lists, code) in place.
+
+**opencode:** start it with a server port so the page can push each Send
+straight into the agent's session (no polling, no waiting):
+
+```
+opencode --port 4096        # or: alias oc='opencode --port 4096'
+```
+
+The web server finds it at `http://127.0.0.1:4096` (override with
+`OPENCODE_URL` / `--opencode-url`; `OPENCODE_SERVER_PASSWORD` is honoured).
+Without it the skill falls back to a polling wait loop, which is slower and
+can stall. The page tells you when a Send isn't being picked up.
+
+Inspired by [grill-with-ui](https://github.com/jasonku09/grill-with-ui).
 
 ## Required: jira-mcp MCP server
 
