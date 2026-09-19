@@ -419,6 +419,110 @@ def jira_get_issues(
     return _wrap("jira_get_issues", res)
 
 
+def _clip(text: Any, limit: int) -> str:
+    t = text if isinstance(text, str) else ("" if text is None else str(text))
+    return t if len(t) <= limit else t[:limit] + f"...[+{len(t) - limit} chars]"
+
+
+def _brief_issue(issue: dict, sp_field: Optional[str], team_field: Optional[str], base_url: str,
+                 max_comments: int, max_comment_chars: int, max_description_chars: int) -> dict:
+    """Reduce a raw Jira issue (REST v2 payload) to what an LLM needs to plan work. Pure function."""
+    f = issue.get("fields") or {}
+
+    def nm(o: Any) -> Optional[str]:
+        return (o or {}).get("name") if isinstance(o, dict) else None
+
+    def ref(o: dict) -> dict:
+        f2 = (o or {}).get("fields") or {}
+        return {"key": (o or {}).get("key"), "type": nm(f2.get("issuetype")), "status": nm(f2.get("status")), "summary": f2.get("summary")}
+
+    links = []
+    for lk in f.get("issuelinks") or []:
+        t = lk.get("type") or {}
+        if lk.get("outwardIssue"):
+            links.append({"rel": t.get("outward"), **ref(lk["outwardIssue"])})
+        elif lk.get("inwardIssue"):
+            links.append({"rel": t.get("inward"), **ref(lk["inwardIssue"])})
+
+    all_comments = ((f.get("comment") or {}).get("comments")) or []
+    shown = all_comments[-max_comments:] if max_comments > 0 else []
+    comments = []
+    for c in shown:
+        a = c.get("author") or {}
+        body = re.sub(r"\[~accountid:[^\]]+\]", "@user", c.get("body") or "")
+        item = {"author": a.get("displayName"), "date": (c.get("created") or "")[:10], "body": _clip(body, max_comment_chars)}
+        if a.get("accountType") == "app":
+            item["bot"] = True
+        comments.append(item)
+
+    team = f.get(team_field) if team_field else None
+    out = {
+        "key": issue.get("key"),
+        "link": f"{base_url}/browse/{issue.get('key')}" if base_url and issue.get("key") else None,
+        "summary": f.get("summary"),
+        "type": nm(f.get("issuetype")),
+        "status": nm(f.get("status")),
+        "resolution": nm(f.get("resolution")),
+        "priority": nm(f.get("priority")),
+        "labels": f.get("labels") or [],
+        "components": [nm(c) for c in (f.get("components") or [])],
+        "fix_versions": [nm(v) for v in (f.get("fixVersions") or [])],
+        "assignee": (f.get("assignee") or {}).get("displayName"),
+        "reporter": (f.get("reporter") or {}).get("displayName"),
+        "created": (f.get("created") or "")[:10],
+        "resolved": (f.get("resolutiondate") or "")[:10] or None,
+        "story_points": f.get(sp_field) if sp_field else None,
+        "assigned_team": nm(team) if isinstance(team, dict) else team,
+        "parent": ref(f["parent"]) if f.get("parent") else None,
+        "subtasks": [ref(x) for x in (f.get("subtasks") or [])],
+        "links": links,
+        "description": _clip(f.get("description"), max_description_chars),
+        "comments": comments,
+        "comments_total": (f.get("comment") or {}).get("total", len(all_comments)),
+    }
+    if out["comments_total"] > len(comments):
+        out["comments_omitted_older"] = out["comments_total"] - len(comments)
+    return out
+
+
+@app.tool()
+def jira_get_issue_brief(issue_keys: list[str], max_comments: int = 20, max_comment_chars: int = 1500, max_description_chars: int = 8000) -> str:
+    """Read-only, compact briefing of one or more Jira issues, sized for an LLM context.
+
+    Prefer this over jira_get_issues(all_fields=True), which returns ~75 KB (150+ fields) per issue.
+
+    Args:
+        issue_keys (list[str]): Issue keys like ["ABC-123"].
+        max_comments (int): Newest N comments to include (older ones are counted, not sent).
+        max_comment_chars (int): Per-comment text cap.
+        max_description_chars (int): Description text cap.
+
+    Returns:
+        str: Minified JSON {"issues": [...], "count": N}. Each issue has key, link, summary, type, status,
+             resolution, priority, labels, components, fix_versions, assignee, reporter, created, resolved,
+             story_points, assigned_team, parent, subtasks, links (with relation + status), description,
+             comments (author, date, body; bot=true for app accounts), comments_total.
+    """
+    jira = _require(deps.jira, "Jira")
+    sp_field = _find_story_points_field(jira)
+    team_field = _find_assigned_team_field(jira)
+    fields = ["summary", "description", "status", "resolution", "issuetype", "priority", "labels", "components",
+              "fixVersions", "parent", "subtasks", "issuelinks", "comment", "assignee", "reporter", "created", "resolutiondate"]
+    fields += [x for x in (sp_field, team_field) if x]
+    base_url = getattr(jira, "url", "").rstrip("/")
+    results: list[dict] = []
+    for k in issue_keys or []:
+        if not re.match(r"^[A-Za-z][A-Za-z0-9_]*-\d+$", k or ""):
+            results.append({"key": k, "error": "Invalid issue key format"})
+            continue
+        try:
+            raw = jira.get_issue(k, fields=",".join(fields))
+            results.append(_brief_issue(raw, sp_field, team_field, base_url, max_comments, max_comment_chars, max_description_chars))
+        except Exception as e:
+            results.append({"key": k, "error": str(e)})
+    return _wrap("jira_get_issue_brief", {"issues": results, "count": len(results)})
+
+
 @app.tool()
 def jira_search(jql: str) -> str:
     """Search Jira using JQL and return a compact list of issues.
