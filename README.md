@@ -3,6 +3,31 @@
 Personal collection of portable agent skills and MCP servers (Claude Code,
 opencode, etc), growing over time.
 
+> [!CAUTION]
+> ## VERY IMPORTANT — lock Jira to read-only before you use this
+>
+> The Jira skills in this repo (`jira-refine`, `jira-refine-ui`) only ever **read** Jira, but the `jira-mcp` server also exposes tools that **write** to it
+> (`jira_create_issue`, `jira_add_comment`, `jira_transition_issue`, `jira_set_*`, …). A skill's instructions
+> say never to use them, but a model can ignore instructions — a local model once tried `jira_create_issue`
+> during a refinement. The only reliable protection is to make those tools unavailable.
+>
+> **You (not the agent) run this once for every folder you launch the agent from:**
+>
+> ```bash
+> mcp/lock-jira-readonly.sh --dir /path/to/your/refine/folder
+> ```
+>
+> - It denies every Jira write tool in that folder's `.claude/settings.json` (Claude Code) and
+>   `opencode.json` (opencode). Reads (`jira_get_issues`, `jira_search`, …) stay allowed.
+> - It is **per folder, not global**, so a separate ticket-creating skill can still write when run
+>   from a different folder. `--undo` removes exactly what it added.
+> - **Restart the agent** afterwards (config is read at startup), and always launch it from that folder.
+> - **The agent must not run this script** — it is a permission boundary, not a setup step for the model.
+> - Check it worked: `grep -c jira_create_issue /path/to/your/refine/folder/opencode.json` should print
+>   `1` (and `.claude/settings.json` likewise if you use Claude Code).
+> - If your MCP server is registered under a name other than `jira-mcp`, add `--server <name>` or the
+>   rules will not match and **nothing is blocked**.
+
 ## Install
 
 One script handles both skills and MCP servers.
@@ -56,7 +81,9 @@ skills directory — no agent-specific knowledge needed.
 
 ## Skills
 
-- [jira-refine](jira-refine/) — refine a Jira ticket into a parallelizable epic/story/task/spike breakdown.
+- [jira-refine](jira-refine/) — refine a Jira ticket into a parallelizable epic/story/task/spike breakdown, interviewing you in the terminal.
+- [jira-refine-ui](jira-refine-ui/) — the same refinement on a local web page: question cards, plan review with size editing, rendered plan file.
+- [repo-context](repo-context/) — draft a `CONTEXT.md` domain-context folder for a repo (ownership, layout map, conventions, gaps) that the two skills above discover automatically.
 
 ## MCP servers
 
