@@ -102,20 +102,14 @@ Optional: `JIRA_BEARER_TOKEN`, `JIRA_AUTH` (`basic`/`bearer`),
 
 ## Domain context (optional, automatic)
 
-The skill grounds its questions in short per-repo `CONTEXT.md` files (purpose,
-ownership, layout, conventions, known gaps). Generate one with the
-[`repo-context`](../repo-context/) skill; it lands in
-`~/.local/share/jira-refine/context/<repo>/` and is discovered automatically —
-no configuration. The skill first reads only each file's header, then opens in
-full just the repos the ticket touches.
-
-Optionally, to also search other folders (e.g. a team-shared context repo):
-
-```
-export JIRA_REFINE_CONTEXT_DIRS=/path/to/context-a:/path/to/context-b
-```
-
-With no context anywhere, the skill simply does less domain-aware refinement.
+Run the skill from a directory that is a git repo, or that contains git repos as
+immediate subdirectories. It looks in each for `REPO_CONTEXT.md` (purpose,
+ownership, layout, conventions, known gaps), made by the
+[`repo-context`](../repo-context/) skill, and for an optional `CONTEXT.md`
+glossary. It reads only each header first, then opens in full just the repos the
+ticket touches. If a touched repo has no `REPO_CONTEXT.md` (or it is stale), the
+skill offers to generate it, to wait while you run `/repo-context`, or to
+proceed without. Generated files are untracked; commit or ignore them yourself.
 
 ## Source repos (optional, read reactively)
 
