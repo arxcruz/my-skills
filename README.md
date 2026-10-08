@@ -83,6 +83,7 @@ skills directory — no agent-specific knowledge needed.
 
 - [jira-refine](jira-refine/) — refine a Jira ticket into a parallelizable epic/story/task/spike breakdown, interviewing you in the terminal.
 - [jira-refine-ui](jira-refine-ui/) — the same refinement on a local web page: question cards, plan review with size editing, rendered plan file.
+- [to-jira](to-jira/) — file the tickets from an approved `<KEY>-refinement-plan.md` through `jira-mcp` (preview, confirm, create, link). The only skill that **writes** to Jira: run it from a folder that is *not* locked read-only.
 - [repo-context](repo-context/) — draft a `REPO_CONTEXT.md` in a repo (ownership, layout map, conventions, gaps) that the two skills above find in the current directory's repos.
 
 ## MCP servers
